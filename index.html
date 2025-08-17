@@ -410,6 +410,29 @@
         </div>
 
         <div class="section">
+            <h2>🏆 Recent Winners</h2>
+            <table class="numbers-table">
+                <thead>
+                    <tr>
+                        <th style="width: 80px;">Draw Date</th>
+                        <th style="width: 70px;">Number</th>
+                        <th style="width: 120px;">Winner</th>
+                        <th style="width: 80px;">Prize</th>
+                        <th style="width: 100px;">To Charity</th>
+                        <th class="admin-only" style="width: 80px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="winnersTableBody">
+                    <tr>
+                        <td colspan="6" style="text-align: center; color: #666; font-style: italic;">
+                            No winners recorded yet
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section">
             <h2>📋 Numbers & Players</h2>
             <table class="numbers-table">
                 <thead>
@@ -431,6 +454,7 @@
         let gameData = JSON.parse(localStorage.getItem('bonusBallData')) || {
             numbers: {},
             winner: null,
+            winnersHistory: [],
             nextDrawDate: getNextSaturday().toISOString().split('T')[0]
         };
 
@@ -481,7 +505,9 @@
 
         function addWeeksToDate(date, weeks) {
             const newDate = new Date(date);
-            newDate.setDate(newDate.getDate() + (weeks * 7));
+            // Add (weeks - 1) * 7 days to get the correct Saturday
+            // Week 1 = same date, Week 2 = +7 days, Week 3 = +14 days, etc.
+            newDate.setDate(newDate.getDate() + ((weeks - 1) * 7));
             return newDate;
         }
 
@@ -608,23 +634,25 @@
                 return;
             }
             
-            // Calculate new paid until date
+            // Calculate new paid until date (always based on Saturday draws)
             let startDate;
-            if (player.paidUntil && new Date(player.paidUntil) > new Date()) {
-                // Extend from current paid until date
-                startDate = new Date(player.paidUntil);
+            if (player.paidUntil && new Date(player.paidUntil) >= new Date()) {
+                // If currently paid, extend from the Saturday after their current paid date
+                const currentPaidUntil = new Date(player.paidUntil);
+                startDate = getNextSaturday(currentPaidUntil);
             } else {
                 // Start from next draw date
                 startDate = new Date(gameData.nextDrawDate);
             }
             
+            // Add weeks - 1 because we include the starting Saturday
             const newPaidUntil = addWeeksToDate(startDate, weeks);
             player.paidUntil = newPaidUntil.toISOString().split('T')[0];
             
             saveData();
             renderTable();
             
-            alert(`${player.name} paid for ${weeks} week(s). Paid until: ${formatDate(newPaidUntil)}`);
+            alert(`${player.name} paid for ${weeks} week(s). Last paid draw: ${formatDate(newPaidUntil)}`);
         }
 
         function markUnpaid(number) {
@@ -717,6 +745,26 @@
             const player = gameData.numbers[winningNumber];
             const hasPlayer = player && player.name;
             const isPaid = hasPlayer && getPlayerStatus(winningNumber) === 'paid';
+            const totalCollected = calculateTotalCollected();
+            
+            const winnerRecord = {
+                drawDate: gameData.nextDrawDate,
+                number: winningNumber,
+                playerName: hasPlayer ? player.name : null,
+                isPaid: isPaid,
+                prizeAmount: isPaid ? 80 : 0,
+                charityAmount: isPaid ? totalCollected - 80 : totalCollected,
+                recordedDate: new Date().toISOString().split('T')[0]
+            };
+            
+            // Add to winners history
+            if (!gameData.winnersHistory) gameData.winnersHistory = [];
+            gameData.winnersHistory.unshift(winnerRecord); // Add to beginning of array
+            
+            // Keep only last 20 winners
+            if (gameData.winnersHistory.length > 20) {
+                gameData.winnersHistory = gameData.winnersHistory.slice(0, 20);
+            }
             
             gameData.winner = {
                 number: winningNumber,
@@ -729,6 +777,7 @@
             saveData();
             renderWinner();
             renderTable();
+            renderWinnersHistory();
         }
 
         function clearWinner() {
@@ -738,6 +787,47 @@
             saveData();
             renderWinner();
             renderTable();
+        }
+
+        function renderWinnersHistory() {
+            const tbody = document.getElementById('winnersTableBody');
+            
+            if (!gameData.winnersHistory || gameData.winnersHistory.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" style="text-align: center; color: #666; font-style: italic;">
+                            No winners recorded yet
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            tbody.innerHTML = gameData.winnersHistory.map((winner, index) => `
+                <tr>
+                    <td>${formatDate(new Date(winner.drawDate))}</td>
+                    <td style="text-align: center; font-weight: bold;">${winner.number}</td>
+                    <td>${winner.playerName || 'No player'}</td>
+                    <td style="text-align: center;">£${winner.prizeAmount}</td>
+                    <td style="text-align: center;">£${winner.charityAmount}</td>
+                    <td class="admin-only">
+                        <button class="btn btn-small" onclick="deleteWinner(${index})" 
+                                style="background: #dc3545;" title="Delete this record">
+                            Del
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function deleteWinner(index) {
+            if (!isAdminMode) return;
+            
+            if (confirm('Delete this winner record?')) {
+                gameData.winnersHistory.splice(index, 1);
+                saveData();
+                renderWinnersHistory();
+            }
         }
 
         function renderWinner() {
@@ -823,6 +913,7 @@
         setMode('view');
         renderTable();
         renderWinner();
+        renderWinnersHistory();
 
         // Cloud sync functions (keeping your existing ones)
         (function () {
@@ -840,6 +931,7 @@
                         renderTable();
                         updateStats();
                         renderWinner();
+                        renderWinnersHistory();
                     }
                 } catch (e) { }
             }
