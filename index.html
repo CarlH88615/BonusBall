@@ -1295,6 +1295,92 @@ document.addEventListener('DOMContentLoaded', function () {
     padding: 2px 6px; border-radius: 999px;
   }
 </style>
+<script>
+(function(){
+  // --- helpers ---
+  function findWinnersTable(){
+    // 1) prefer the table under the "Recent Winners" heading
+    const heads = Array.from(document.querySelectorAll('h2,h3,h4'));
+    const head = heads.find(h => /recent\s+winners/i.test(h.textContent));
+    if (head) {
+      // look at next siblings first
+      let el = head;
+      for (let i=0; i<6 && el; i++){
+        el = el.nextElementSibling;
+        if (el && el.tagName === 'TABLE') return el;
+        if (el && el.querySelector && el.querySelector('table')) return el.querySelector('table');
+      }
+    }
+    // 2) fallback: any table whose headers include Winner + Prize
+    return Array.from(document.querySelectorAll('table'))
+      .find(t => /winner/i.test(t.textContent) && /prize/i.test(t.textContent));
+  }
+  function colIndexByHeader(table, label){
+    const ths = table.querySelectorAll('thead th, tr:first-child th');
+    for (let i=0; i<ths.length; i++){
+      if ((ths[i].textContent||'').toLowerCase().includes(label)) return i;
+    }
+    return -1;
+  }
+  function parseMoney(txt){
+    if (!txt) return 0;
+    const n = parseFloat(String(txt).replace(/[^\d.\-]/g,''));
+    return isNaN(n) ? 0 : n;
+  }
+  function ensureTotalsBar(container){
+    let bar = document.getElementById('winnersTotals');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'winnersTotals';
+      bar.style.cssText = 'margin:8px 0 12px;font-weight:600;';
+      const head = (container.querySelector && container.querySelector('h2, h3, h4')) ? container.querySelector('h2, h3, h4') : null;
+      (head && head.parentNode) ? head.parentNode.insertBefore(bar, head.nextSibling) : document.body.appendChild(bar);
+    }
+    return bar;
+  }
+
+  // --- compute + render ---
+  function refreshWinnerTotals(){
+    const table = findWinnersTable();
+    if (!table) return;
+
+    const prizeIdx   = colIndexByHeader(table, 'prize');
+    const charityIdx = colIndexByHeader(table, 'charity');
+    if (prizeIdx < 0 || charityIdx < 0) return;
+
+    const rows = table.querySelectorAll('tbody tr');
+    let paidOut = 0, donated = 0;
+
+    rows.forEach(tr => {
+      if (/no winners/i.test(tr.textContent)) return; // skip placeholder
+      const cells = tr.children; if (!cells || !cells.length) return;
+      paidOut += parseMoney(cells[prizeIdx]?.textContent);
+      donated += parseMoney(cells[charityIdx]?.textContent);
+    });
+
+    const container = table.closest('section') || table.parentElement || document;
+    const bar = ensureTotalsBar(container);
+    bar.innerHTML = `Total winnings paid: £${paidOut.toFixed(2)} &nbsp;|&nbsp; Total to charity: £${donated.toFixed(2)}`;
+
+    // optional: keep in shared data + save
+    try {
+      window.gameData = window.gameData || {};
+      window.gameData.totals = { paidOut, donated };
+      if (typeof window.saveData === 'function') window.saveData();
+    } catch {}
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    refreshWinnerTotals();
+    // auto-update whenever rows change
+    const table = findWinnersTable();
+    if (table) {
+      const target = table.tBodies[0] || table;
+      new MutationObserver(refreshWinnerTotals).observe(target, { childList: true, subtree: true, characterData: true });
+    }
+  });
+})();
+</script>
 
 </body>
 </html>
