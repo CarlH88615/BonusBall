@@ -398,9 +398,16 @@
 
         let isAdminMode = false;
 
-        function saveData() {
-            localStorage.setItem('bonusBallData', JSON.stringify(gameData));
-        }
+       function saveData() {
+  try { localStorage.setItem('bonusBallData', JSON.stringify(gameData)); } catch {}
+  if (!ADMIN_KEY) return; // only admins write to the shared store
+  fetch('/.netlify/functions/game-data', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-admin-key': ADMIN_KEY },
+    body: JSON.stringify({ action: 'save', data: gameData })
+  }).catch(err => console.warn('Cloud save failed', err));
+}
+
 
         function setMode(mode) {
             isAdminMode = mode === 'admin';
