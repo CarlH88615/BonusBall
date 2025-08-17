@@ -335,6 +335,78 @@
                 grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
                 gap: 15px;
             }
+
+            .bonus-balls-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 10px;
+            }
+
+            .bonus-ball-item {
+                padding: 8px;
+            }
+
+            .ball-image {
+                width: 35px;
+                height: 35px;
+            }
+        }
+
+        /* Bonus Ball Styles */
+        .bonus-balls-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 15px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .bonus-ball-item {
+            background: white;
+            border-radius: 15px;
+            padding: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            transition: transform 0.2s ease;
+        }
+
+        .bonus-ball-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .ball-image {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 8px;
+            font-weight: bold;
+            font-size: 18px;
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        /* Ball colors based on UK Lotto ranges */
+        .ball-1-9 { background: linear-gradient(135deg, #FFD700, #FFA500) !important; } /* Gold */
+        .ball-10-19 { background: linear-gradient(135deg, #FF69B4, #FF1493) !important; } /* Pink */
+        .ball-20-29 { background: linear-gradient(135deg, #32CD32, #228B22) !important; } /* Green */
+        .ball-30-39 { background: linear-gradient(135deg, #1E90FF, #0000CD) !important; } /* Blue */
+        .ball-40-49 { background: linear-gradient(135deg, #FF4500, #DC143C) !important; } /* Red */
+        .ball-50-59 { background: linear-gradient(135deg, #9370DB, #8A2BE2) !important; } /* Purple */
+
+        .ball-date {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+
+        .ball-number {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
         }
     </style>
 </head>
@@ -397,6 +469,17 @@
                     </div>
                 </div>
                 <div>
+                    <h3>🎱 Bonus Ball Tools</h3>
+                    <div class="winner-input-group">
+                        <button class="btn" onclick="checkLatestBonusBall()" style="background: #28a745;">
+                            Check Latest Draw
+                        </button>
+                        <button class="btn" onclick="showBonusBallHistory()" style="background: #6c757d;">
+                            Show History
+                        </button>
+                    </div>
+                </div>
+                <div>
                     <h3>🎯 Set Winner</h3>
                     <div class="winner-input-group">
                         <label for="winningNumber"><strong>Winning Number (1-59):</strong></label>
@@ -407,6 +490,13 @@
                 </div>
             </div>
             <div id="winnerResult"></div>
+        </div>
+
+        <div class="section">
+            <h2>🎱 Recent Saturday Bonus Balls</h2>
+            <div id="bonusBallsContainer" style="text-align: center; padding: 20px;">
+                <p style="color: #666; font-style: italic;">Loading recent bonus balls...</p>
+            </div>
         </div>
 
         <div class="section">
@@ -830,6 +920,117 @@
             }
         }
 
+        // Auto-check for latest bonus ball results
+        async function checkLatestBonusBall() {
+            try {
+                const response = await fetch('/.netlify/functions/lotto-bonus?limit=1');
+                if (!response.ok) throw new Error('API failed');
+                
+                const data = await response.json();
+                const latestDraw = data.draws[0];
+                
+                if (!latestDraw) {
+                    alert('No recent draw data available');
+                    return;
+                }
+                
+                const drawDate = new Date(latestDraw.date);
+                const bonusNumber = latestDraw.bonus;
+                
+                // Check if this is today's or recent draw
+                const today = new Date();
+                const daysDiff = Math.floor((today - drawDate) / (1000 * 60 * 60 * 24));
+                
+                if (daysDiff > 7) {
+                    alert(`Latest draw was ${daysDiff} days ago (${formatDate(drawDate)}). Bonus ball: ${bonusNumber}`);
+                    return;
+                }
+                
+                // Check if we have a winner
+                const player = gameData.numbers[bonusNumber];
+                const hasPlayer = player && player.name;
+                const isPaid = hasPlayer && getPlayerStatus(bonusNumber) === 'paid';
+                
+                let message = `Latest Draw: ${formatDate(drawDate)}\nBonus Ball: ${bonusNumber}\n\n`;
+                
+                if (!hasPlayer) {
+                    message += `Number ${bonusNumber} not assigned - All money goes to charity! 🎗️`;
+                } else if (!isPaid) {
+                    message += `${player.name} has number ${bonusNumber} but hasn't paid - All money goes to charity! 🎗️`;
+                } else {
+                    message += `🎉 WINNER! ${player.name} (number ${bonusNumber}) wins £80! 🎉`;
+                }
+                
+                // Ask if they want to auto-set the winner
+                if (confirm(message + '\n\nAuto-set this as the winner?')) {
+                    document.getElementById('winningNumber').value = bonusNumber;
+                    setWinner();
+                } else {
+                    alert(message);
+                }
+                
+            } catch (error) {
+                console.error('Bonus ball check failed:', error);
+                alert('Failed to check latest bonus ball results. Try again later.');
+            }
+        }
+
+        // Show recent bonus ball history
+        async function showBonusBallHistory() {
+            try {
+                const response = await fetch('/.netlify/functions/lotto-bonus?limit=20');
+                if (!response.ok) throw new Error('API failed');
+                
+                const data = await response.json();
+                
+                if (!data.draws || data.draws.length === 0) {
+                    alert('No bonus ball history available');
+                    return;
+                }
+                
+                // Create popup with history
+                const historyHtml = data.draws.map(draw => 
+                    `${formatDate(new Date(draw.date))}: ${draw.bonus}`
+                ).join('\n');
+                
+                alert(`Recent Saturday Bonus Balls:\n\n${historyHtml}`);
+                
+            } catch (error) {
+                console.error('History fetch failed:', error);
+                alert('Failed to fetch bonus ball history');
+            }
+        }
+
+        // Auto-check scheduler - runs every Saturday after 8:30 PM
+        function scheduleAutoCheck() {
+            function checkTime() {
+                const now = new Date();
+                const day = now.getDay(); // 6 = Saturday
+                const hour = now.getHours();
+                const minute = now.getMinutes();
+                
+                // Saturday after 8:30 PM
+                if (day === 6 && hour >= 20 && minute >= 30) {
+                    // Only check if we haven't set a winner for today yet
+                    const today = now.toISOString().split('T')[0];
+                    const lastWinnerDate = gameData.winner ? gameData.winner.date : null;
+                    
+                    if (lastWinnerDate !== today) {
+                        console.log('Auto-checking for bonus ball results...');
+                        checkLatestBonusBall();
+                    }
+                }
+            }
+            
+            // Check every 30 minutes on Saturday evenings
+            setInterval(() => {
+                const now = new Date();
+                if (now.getDay() === 6 && now.getHours() >= 20) {
+                    checkTime();
+                }
+            }, 30 * 60 * 1000); // 30 minutes
+        }
+
         function renderWinner() {
             const resultDiv = document.getElementById('winnerResult');
             
@@ -914,6 +1115,9 @@
         renderTable();
         renderWinner();
         renderWinnersHistory();
+        
+        // Start auto-check scheduler
+        scheduleAutoCheck();
 
         // Cloud sync functions (keeping your existing ones)
         (function () {
