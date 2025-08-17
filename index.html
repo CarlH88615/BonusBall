@@ -814,6 +814,78 @@ function saveData() {
   setInterval(pullRemote, 15000);
 })();
 </script>
+<script>
+(function(){
+  // ensure globals
+  window.ADMIN_KEY = window.ADMIN_KEY || "";
+
+  // Define the global unlock function that your button calls
+  window.checkAdminCode = async function () {
+    const input = document.getElementById('adminPassword');
+    const pw = (input && input.value || '').trim();
+
+    try {
+      const res = await fetch('/.netlify/functions/game-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': pw },
+        body: JSON.stringify({ action: 'auth' })
+      });
+      if (res.ok) {
+        window.ADMIN_KEY = pw;
+        if (typeof window.isAdminMode !== 'undefined') window.isAdminMode = true;
+
+        const btn  = document.getElementById('adminBtn');
+        const lock = document.getElementById('adminUnlock');
+        if (btn)  btn.style.display  = 'block';
+        if (lock) lock.style.display = 'none';
+
+        alert('Admin mode unlocked!');
+      } else {
+        alert('Incorrect admin code');
+        if (input) input.value = '';
+      }
+    } catch {
+      alert('Network error while checking admin code');
+    }
+  };
+
+  // Also patch saveData so admin changes push to the cloud
+  if (typeof window.saveData === 'function') {
+    const _save = window.saveData;
+    window.saveData = function () {
+      try { _save.apply(this, arguments); } catch {}
+
+      if (!window.ADMIN_KEY) return; // only admins write
+      fetch('/.netlify/functions/game-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': window.ADMIN_KEY },
+        body: JSON.stringify({ action: 'save', data: (window.gameData || {}) })
+      }).catch(()=>{});
+    };
+  }
+
+  // Pull shared data on load + every 15s so viewers see updates
+  async function pull(){
+    try{
+      const r = await fetch('/.netlify/functions/game-data');
+      if (!r.ok) return;
+      const data = await r.json();
+      if (data && typeof data === 'object') {
+        if (window.gameData && typeof window.gameData === 'object') {
+          window.gameData = { ...window.gameData, ...data };
+        } else {
+          window.gameData = data;
+        }
+        window.renderTable && window.renderTable();
+        window.updateStats && window.updateStats();
+        window.renderWinner && window.renderWinner();
+      }
+    } catch {}
+  }
+  document.addEventListener('DOMContentLoaded', pull);
+  setInterval(pull, 15000);
+})();
+</script>
 
 </body>
 </html>
