@@ -613,19 +613,37 @@
             alert(`Next draw date updated to: ${formatDate(selectedDate)}`);
         }
 
-        function checkAdminCode() {
-            const password = document.getElementById('adminPassword').value;
-            const correctCode = '!!04Jack2nd'; // Admin password
-            
-            if (password === correctCode) {
-                document.getElementById('adminBtn').style.display = 'block';
-                document.getElementById('adminUnlock').style.display = 'none';
-                alert('Admin mode unlocked!');
-            } else {
-                alert('Incorrect admin code');
-                document.getElementById('adminPassword').value = '';
-            }
-        }
+function checkAdminCode() {
+  const input = document.getElementById('adminPassword');
+  const password = (input?.value || '').trim();
+
+  fetch('/.netlify/functions/game-data', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-admin-key': password },
+    body: JSON.stringify({ action: 'auth' })
+  })
+  .then(res => {
+    if (!res.ok) throw new Error('bad');
+    return res.json().catch(() => ({}));
+  })
+  .then(() => {
+    // success
+    ADMIN_KEY = password;     // keep in memory only
+    isAdminMode = true;       // IMPORTANT so other admin-only actions work
+
+    // keep your existing UI behaviour
+    const btn = document.getElementById('adminBtn');
+    const lock = document.getElementById('adminUnlock');
+    if (btn) btn.style.display = 'block';
+    if (lock) lock.style.display = 'none';
+
+    alert('Admin mode unlocked!');
+  })
+  .catch(() => {
+    alert('Incorrect admin code');
+    if (input) input.value = '';
+  });
+}
 
         function clearPlayer(number) {
             if (!isAdminMode) return;
