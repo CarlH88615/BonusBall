@@ -1117,6 +1117,51 @@
         renderWinnersHistory();
         
         // Start auto-check scheduler
+        // Load and display recent bonus balls on page load
+async function loadRecentBonusBalls() {
+    const container = document.getElementById('bonusBallsContainer');
+    
+    try {
+        const response = await fetch('/.netlify/functions/lotto-bonus?limit=10');
+        if (!response.ok) throw new Error('API failed');
+        
+        const data = await response.json();
+        
+        if (!data.draws || data.draws.length === 0) {
+            container.innerHTML = '<p style="color: #666; font-style: italic;">No recent bonus ball data available</p>';
+            return;
+        }
+        
+        // Create the bonus balls grid
+        const gridHtml = data.draws.map(draw => {
+            const drawDate = new Date(draw.date);
+            const bonusNumber = draw.bonus;
+            
+            // Determine ball color class based on number ranges
+            let ballClass = '';
+            if (bonusNumber >= 1 && bonusNumber <= 9) ballClass = 'ball-1-9';
+            else if (bonusNumber >= 10 && bonusNumber <= 19) ballClass = 'ball-10-19';
+            else if (bonusNumber >= 20 && bonusNumber <= 29) ballClass = 'ball-20-29';
+            else if (bonusNumber >= 30 && bonusNumber <= 39) ballClass = 'ball-30-39';
+            else if (bonusNumber >= 40 && bonusNumber <= 49) ballClass = 'ball-40-49';
+            else if (bonusNumber >= 50 && bonusNumber <= 59) ballClass = 'ball-50-59';
+            
+            return `
+                <div class="bonus-ball-item">
+                    <div class="ball-date">${formatDate(drawDate)}</div>
+                    <div class="ball-image ${ballClass}">${bonusNumber}</div>
+                    <div class="ball-number">Ball ${bonusNumber}</div>
+                </div>
+            `;
+        }).join('');
+        
+        container.innerHTML = `<div class="bonus-balls-grid">${gridHtml}</div>`;
+        
+    } catch (error) {
+        console.error('Failed to load bonus balls:', error);
+        container.innerHTML = '<p style="color: #e74c3c; font-style: italic;">Failed to load bonus ball data</p>';
+    }
+}
         scheduleAutoCheck();
 
         // Cloud sync functions (keeping your existing ones)
@@ -1136,6 +1181,7 @@
                         updateStats();
                         renderWinner();
                         renderWinnersHistory();
+loadRecentBonusBalls();
                     }
                 } catch (e) { }
             }
