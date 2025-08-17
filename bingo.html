@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Bingo Lotto</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:20px}
+    #bingoPlayers{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+    .bl-card{border:1px solid #eee;border-radius:10px;padding:10px;background:#fafafa}
+    .bl-name{font-weight:700;margin-bottom:6px}
+    .bl-chips{display:flex;flex-wrap:wrap;gap:6px}
+    .bl-chip{border-radius:999px;padding:4px 8px;background:#f1f1f1;font-weight:600}
+    .bl-chip.hit{background:#e9f8ea;color:#0c6b0c;border:1px solid #cfe8d0}
+    .bl-chip.miss{background:#ffe8e8;color:#9b0000;border:1px solid #f6caca}
+    .bl-progress{margin-top:6px;font-size:12px;color:#666}
+    @media(max-width:480px){#bingoPlayers{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <h1>🎱 Bingo Lotto</h1>
+  <p><a href="/">← Back</a></p>
+
+  <div id="bingoControls" style="display:none;margin:6px 0 12px;">
+    <button id="blAddBtn">Add player</button>
+  </div>
+  <div id="bingoPlayers"></div>
+  <div id="bingoStatus" style="margin-top:10px;color:#555;font-size:0.95em;"></div>
+
+  <script>
+  (function(){
+    function ensureBingoInit(){
+      window.gameData = window.gameData || {};
+      window.gameData.bingo = window.gameData.bingo || { started: new Date().toISOString().slice(0,10), players: [], winner: null };
+    }
+    const isAdmin = () => !!(window.ADMIN_KEY || window.isAdminMode); // if you want unlock on this page, reuse your existing unlock flow
+
+    function blAddPlayer(){
+      if (!isAdmin()) return alert('Admin only');
+      ensureBingoInit();
+      const name = (prompt('Player name?')||'').trim(); if (!name) return;
+      const numsStr = prompt('Enter SIX numbers 1–59, comma separated (e.g. 1, 14, 27, 33, 41, 55)'); if (!numsStr) return;
+      const set = new Set(numsStr.split(/[\s,]+/).map(n=>parseInt(n,10)).filter(n=>n>=1&&n<=59));
+      if (set.size !== 6) return alert('Please enter exactly six unique numbers between 1 and 59.');
+      const numbers = Array.from(set).sort((a,b)=>a-b);
+      window.gameData.bingo.players.push({ name, numbers, marked: [] });
+      try{ window.saveData && window.saveData(); }catch{}
+      blRender();
+    }
+
+    async function blLoadAndMark(){
+      ensureBingoInit();
+      const status = document.getElementById('bingoStatus');
+      if (status) status.textContent = 'Loading latest UK Lotto results…';
+      try{
+        const r = await fetch('/.netlify/functions/lotto-main?limit=60', { cache:'no-store' }); // Saturday only
+        if (!r.ok) throw new Error('API '+r.status);
+        const data = await r.json();
+        const draws = data.draws || [];
+        const since = new Date((window.gameData.bingo.started||'')+'T00:00:00Z').getTime() || 0;
+        const drawnSet = new Set();
+        for (const d of draws){
+          const when = new Date(d.date+'T00:00:00Z').getTime();
+          if (when < since) continue;
+          (d.balls||[]).forEach(n => drawnSet.add(n));
+        }
+        let winner = null;
+        for (const p of (window.gameData.bingo.players||[])){
+          p.marked = p.numbers.filter(n => drawnSet.has(n));
+          if (!winner && p.marked.length === 6){
+            winner = { name: p.name, completedOn: new Date().toISOString().slice(0,10) };
+          }
+        }
+        if (winner) window.gameData.bingo.winner = winner;
+        try{ window.saveData && window.saveData(); }catch{}
+        blRender();
+        if (status) status.textContent = winner ? `🏆 Winner: ${winner.name} (completed on ${winner.completedOn})` : `Checked ${draws.length} draws. No winner yet.`;
+      } catch(e){
+        if (status) status.innerHTML = `<span style="color:#c00">Failed to load results: ${e.message}</span>`;
+      }
+    }
+
+    function blRender(){
+      ensureBingoInit();
+      const wrap = document.getElementById('bingoPlayers'); if (!wrap) return;
+      const ps = window.gameData.bingo.players || [];
+      wrap.innerHTML = ps.map(p=>{
+        const chips = p.numbers.map(n=>{
+          const hit = (p.marked||[]).includes(n);
+          return `<span class="bl-chip ${hit?'hit':'miss'}">${n}</span>`;
+        }).join(' ');
+        const prog = `${(p.marked||[]).length}/6 marked`;
+        return `<div class="bl-card">
+          <div class="bl-name">${p.name}${(p.marked||[]).length===6?' 🏆':''}</div>
+          <div class="bl-chips">${chips}</div>
+          <div class="bl-progress">${prog}</div>
+        </div>`;
+      }).join(ps.length? '' : `<div style="color:#666;font-style:italic;">No players yet (Admin: use “Add player”).</div>`);
+    }
+
+    function showControlsIfAdmin(){
+      const bar = document.getElementById('bingoControls');
+      if (bar) bar.style.display = isAdmin() ? 'block' : 'none';
+    }
+
+    document.addEventListener('DOMContentLoaded', ()=>{
+      showControlsIfAdmin();
+      const btn = document.getElementById('blAddBtn');
+      if (btn) btn.addEventListener('click', blAddPlayer);
+      blRender();
+      blLoadAndMark();
+    });
+  })();
+  </script>
+</body>
+</html>
