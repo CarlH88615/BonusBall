@@ -1215,5 +1215,86 @@ document.addEventListener('DOMContentLoaded', function () {
   try { loadRecentBonusBalls(10); } catch (e) { console.warn('bonus balls:', e); }
 });
 </script>
+    <style id="recent-balls-mobile-fix">
+  /* Scope everything so we don't affect other parts of the page */
+  #bonusBallsContainer { max-width: 100%; }
+
+  /* Responsive grid */
+  #bonusBallsContainer .bonus-balls-grid{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 12px;
+    margin: 0;
+  }
+
+  /* Card layout for each item */
+  #bonusBallsContainer .bonus-ball-item{
+    background: #f8f9fa;
+    border: 1px solid #eee;
+    border-radius: 12px;
+    padding: 10px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Ball circle scales with screen size (no overflow) */
+  #bonusBallsContainer .ball-image{
+    --ball-size: clamp(44px, 16vw, 64px);
+    width: var(--ball-size);
+    height: var(--ball-size);
+    line-height: var(--ball-size);
+    font-size: calc(var(--ball-size) / 2.4);
+    border-radius: 50%;
+    font-weight: 700;
+    margin: 6px auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Text sizes tidy on mobile */
+  #bonusBallsContainer .ball-date{
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 4px;
+    white-space: nowrap;        /* keep date on one line */
+  }
+  #bonusBallsContainer .ball-number{
+    font-size: 12px;
+    margin-top: 4px;
+  }
+
+  /* Tighter layout on smaller phones */
+  @media (max-width: 680px){
+    #bonusBallsContainer .bonus-balls-grid{
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+  }
+  @media (max-width: 480px){
+    #bonusBallsContainer .bonus-balls-grid{
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    #bonusBallsContainer .ball-date{ font-size: 11px; }
+    #bonusBallsContainer .ball-number{ font-size: 11px; }
+  }
+
+  /* If you show a "LATEST" tag, keep it compact */
+  #bonusBallsContainer .latest-draw{
+    position: relative;
+  }
+  #bonusBallsContainer .latest-draw .latest-badge{
+    position: absolute;
+    top: 6px; right: 6px;
+    background: #28a745; color: #fff;
+    font-size: 10px; font-weight: 700;
+    padding: 2px 6px; border-radius: 999px;
+  }
+</style>
+
 </body>
 </html>
