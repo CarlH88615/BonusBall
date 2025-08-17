@@ -10,21 +10,31 @@ const ADMIN   = process.env.ADMIN_KEY || "";
 
 const USE_MANUAL = Boolean(SITE_ID && TOKEN);
 
-// Common responses
 const headers = { "Content-Type": "application/json", "Cache-Control": "no-store" };
-const ok   = (b) => ({ statusCode: 200, headers, body: JSON.stringify(b) });
-const bad  = (s, b) => ({ statusCode: s, headers, body: JSON.stringify(b) });
-const unauth = () => bad(401, "unauthorised");
+const ok    = (b) => ({ statusCode: 200, headers, body: JSON.stringify(b) });
+const fail  = (s, b) => ({ statusCode: s, headers, body: JSON.stringify(b) });
+const unauth = () => fail(401, "unauthorised");
 
 export async function handler(event) {
-  // ✅ Correct getStore usage (manual creds are the SECOND argument)
-  const store = USE_MANUAL
-    ? getStore(STORE, { siteID: SITE_ID, token: TOKEN })
-    : getStore(STORE);
-
-  // Debug: /.netlify/functions/game-data?debug=1
+  // ✅ Let debug run BEFORE touching Blobs (so it never crashes)
   if (event.queryStringParameters?.debug === "1") {
     return ok({ hasSiteId: !!SITE_ID, hasToken: !!TOKEN, useManual: USE_MANUAL });
+  }
+
+  // Build the store (catch misconfig to avoid crash)
+  let store;
+  try {
+    store = USE_MANUAL
+      ? getStore(STORE, { siteID: SITE_ID, token: TOKEN }) // manual config
+      : getStore(STORE);                                    // auto config
+  } catch (err) {
+    return fail(500, {
+      error: "blobs_not_configured",
+      message: String(err && err.message ? err.message : err),
+      hasSiteId: !!SITE_ID,
+      hasToken: !!TOKEN,
+      useManual: USE_MANUAL
+    });
   }
 
   if (event.httpMethod === "GET") {
@@ -46,5 +56,5 @@ export async function handler(event) {
     return ok({ ok: true });
   }
 
-  return bad(405, "Method Not Allowed");
+  return fail(405, "Method Not Allowed");
 }
