@@ -763,5 +763,81 @@
         renderTable();
         renderWinner();
     </script>
+    <script>
+(() => {
+  let ADMIN_KEY = ""; // kept only in memory
+
+  // Override the admin unlock to use the Netlify Function
+  window.checkAdminCode = async function () {
+    const input = document.getElementById('adminPassword');
+    const password = (input?.value || "").trim();
+
+    const res = await fetch('/.netlify/functions/game-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-key': password },
+      body: JSON.stringify({ action: 'auth' })
+    });
+
+    if (res.ok) {
+      ADMIN_KEY = password;
+      // show/hide your existing admin UI if present
+      try {
+        const btn = document.getElementById('adminBtn');
+        const lock = document.getElementById('adminUnlock');
+        if (btn) btn.style.display = 'block';
+        if (lock) lock.style.display = 'none';
+      } catch {}
+      alert('Admin unlocked');
+    } else {
+      alert('Incorrect admin code');
+      if (input) input.value = '';
+    }
+  };
+
+  async function pushRemote() {
+    try {
+      if (!ADMIN_KEY) return;
+      await fetch('/.netlify/functions/game-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': ADMIN_KEY },
+        body: JSON.stringify({ action: 'save', data: (window.gameData || {}) })
+      });
+    } catch (e) { console.warn('Remote save error', e); }
+  }
+
+  async function pullRemote() {
+    try {
+      const res = await fetch('/.netlify/functions/game-data', { method: 'GET' });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data && typeof data === 'object') {
+        // merge/replace local data and re-render using your existing functions if they exist
+        if (window.gameData && typeof window.gameData === 'object') {
+          window.gameData = { ...window.gameData, ...data };
+        } else {
+          window.gameData = data;
+        }
+        window.renderTable && window.renderTable();
+        window.updateStats && window.updateStats();
+        window.renderWinner && window.renderWinner();
+      }
+    } catch (e) { console.warn('Remote load error', e); }
+  }
+
+  // Wrap your existing saveData() so it also writes to the shared store
+  if (typeof window.saveData === 'function') {
+    const _origSave = window.saveData;
+    window.saveData = async function () {
+      try { _origSave.apply(this, arguments); } catch {}
+      await pushRemote();
+    };
+  }
+
+  // Load shared data on page load + poll every 15s so other devices update
+  document.addEventListener('DOMContentLoaded', pullRemote);
+  setInterval(pullRemote, 15000);
+})();
+</script>
+
 </body>
 </html>
