@@ -831,6 +831,37 @@
   } catch(e) { console.warn('shared load failed', e); }
 })();
 </script>
+<script>
+(function(){
+  async function pullFromCloud(){
+    try{
+      const r = await fetch('/.netlify/functions/game-data', { cache: 'no-store' });
+      if(!r.ok) return;
+      const d = await r.json();
+
+      // normalise keys "1","2","3"
+      const nums = d.numbers || {};
+      const normalised = Object.fromEntries(
+        Object.entries(nums).map(([k,v]) => [String(parseInt(k,10)), v])
+      );
+
+      // merge + persist to localStorage so pages that read from it see the data
+      const merged = { ...(window.gameData || {}), ...d, numbers: normalised };
+      window.gameData = merged;
+      try { localStorage.setItem('bonusBallData', JSON.stringify(merged)); } catch {}
+
+      // force re-render using your existing functions
+      window.renderTable && window.renderTable();
+      window.updateStats && window.updateStats();
+      window.renderWinner && window.renderWinner();
+    } catch(e){ console.warn('cloud pull failed', e); }
+  }
+
+  // run once on load, then every 15s for viewers
+  document.addEventListener('DOMContentLoaded', pullFromCloud);
+  setInterval(pullFromCloud, 15000);
+})();
+</script>
 
 </body>
 </html>
