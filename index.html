@@ -1118,19 +1118,38 @@
         
         // Start auto-check scheduler
         // Load and display recent bonus balls on page load
+// Load and display recent bonus balls on page load
 async function loadRecentBonusBalls() {
     const container = document.getElementById('bonusBallsContainer');
     
     try {
+        console.log('Fetching from: /.netlify/functions/lotto-bonus?limit=10');
         const response = await fetch('/.netlify/functions/lotto-bonus?limit=10');
-        if (!response.ok) throw new Error('API failed');
+        
+        console.log('Response status:', response.status);
+        console.log('Response ok:', response.ok);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.log('Error response:', errorText);
+            throw new Error(`API failed with status ${response.status}: ${errorText}`);
+        }
         
         const data = await response.json();
+        console.log('Received data:', data);
         
         if (!data.draws || data.draws.length === 0) {
             container.innerHTML = '<p style="color: #666; font-style: italic;">No recent bonus ball data available</p>';
             return;
         }
+        
+        // ... rest of your function stays the same
+        
+    } catch (error) {
+        console.error('Failed to load bonus balls:', error);
+        container.innerHTML = `<p style="color: #e74c3c; font-style: italic;">Failed to load bonus ball data: ${error.message}</p>`;
+    }
+}
         
         // Create the bonus balls grid
         const gridHtml = data.draws.map(draw => {
