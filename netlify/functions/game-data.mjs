@@ -16,26 +16,15 @@ const fail  = (s, b) => ({ statusCode: s, headers, body: JSON.stringify(b) });
 const unauth = () => fail(401, "unauthorised");
 
 export async function handler(event) {
-  // ✅ Let debug run BEFORE touching Blobs (so it never crashes)
+  // Let debug run BEFORE touching Blobs
   if (event.queryStringParameters?.debug === "1") {
     return ok({ hasSiteId: !!SITE_ID, hasToken: !!TOKEN, useManual: USE_MANUAL });
   }
 
-  // Build the store (catch misconfig to avoid crash)
-  let store;
-  try {
-    store = USE_MANUAL
-      ? getStore(STORE, { siteID: SITE_ID, token: TOKEN }) // manual config
-      : getStore(STORE);                                    // auto config
-  } catch (err) {
-    return fail(500, {
-      error: "blobs_not_configured",
-      message: String(err && err.message ? err.message : err),
-      hasSiteId: !!SITE_ID,
-      hasToken: !!TOKEN,
-      useManual: USE_MANUAL
-    });
-  }
+  // ✅ CORRECT manual config: pass an OBJECT as the FIRST argument
+  const store = USE_MANUAL
+    ? getStore({ name: STORE, siteID: SITE_ID, token: TOKEN })
+    : getStore(STORE);
 
   if (event.httpMethod === "GET") {
     const data = await store.get(KEY, { type: "json" });
