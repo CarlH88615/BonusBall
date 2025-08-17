@@ -863,6 +863,44 @@ function checkAdminCode() {
   setInterval(pullRemote, 15000);
 })();
 </script>
+<script>
+(function () {
+  // 1) Wrap your existing saveData() so it ALSO saves to the cloud
+  const _origSave = window.saveData;
+  window.saveData = function () {
+    try { typeof _origSave === 'function' && _origSave.apply(this, arguments); } catch (e) {}
+    if (!ADMIN_KEY) return; // only admins write
+    fetch('/.netlify/functions/game-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-key': ADMIN_KEY },
+      body: JSON.stringify({ action: 'save', data: (window.gameData || {}) })
+    }).catch(() => {});
+  };
+
+  // 2) Pull shared data and re-render
+  async function pullRemote() {
+    try {
+      const res = await fetch('/.netlify/functions/game-data');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data && typeof data === 'object') {
+        if (window.gameData && typeof window.gameData === 'object') {
+          window.gameData = { ...window.gameData, ...data };
+        } else {
+          window.gameData = data;
+        }
+        window.renderTable && window.renderTable();
+        window.updateStats && window.updateStats();
+        window.renderWinner && window.renderWinner();
+      }
+    } catch (e) {}
+  }
+
+  // 3) Load once on page load + poll every 15s so other devices update
+  document.addEventListener('DOMContentLoaded', pullRemote);
+  setInterval(pullRemote, 15000);
+})();
+</script>
 
 </body>
 </html>
