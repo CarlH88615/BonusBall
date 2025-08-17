@@ -862,6 +862,204 @@
   setInterval(pullFromCloud, 15000);
 })();
 </script>
+<script>
+/* ===== Paid for Next Draw + Winners log (drop-in) ===== */
+(function () {
+  /* --- helpers --- */
+  const PRICE = (window.gameData && window.gameData.pricePerGame) || 2; // £ per entry
+  const toISO = (s) => {
+    if (!s) return null;
+    // accept "YYYY-MM-DD" or "DD/MM/YYYY"
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(s).trim());
+    if (m) {
+      const d = m[3] + "-" + String(m[2]).padStart(2, "0") + "-" + String(m[1]).padStart(2, "0");
+      return d;
+    }
+    try { return new Date(s).toISOString().slice(0,10); } catch { return null; }
+  };
+  const dcmp = (a, b) => (a > b) - (a < b); // string compare YYYY-MM-DD
+
+  const nextDrawISO = () => {
+    const s = (window.gameData && window.gameData.nextDrawDate) || "";
+    return toISO(s) || new Date().toISOString().slice(0,10);
+  };
+
+  const isPaidForNextDraw = (paidUntil) => {
+    const pu = toISO(paidUntil);
+    if (!pu) return false;
+    return dcmp(pu, nextDrawISO()) >= 0; // paid if paidUntil >= nextDrawDate
+  };
+
+  function countPaidForNextDraw() {
+    const nums = (window.gameData && window.gameData.numbers) || {};
+    let c = 0;
+    for (const k in nums) if (isPaidForNextDraw(nums[k].paidUntil)) c++;
+    return c;
+  }
+
+  /* --- recompute badges after your render --- */
+  function applyPaidBadgesForNextDraw() {
+    // If your table has 4 columns: [#][Name][- or name][Status][PaidUntil]
+    // We’ll try a generic approach: look for rows with a number in the first cell.
+    const rows = document.querySelectorAll("table tr");
+    rows.forEach((tr) => {
+      const tds = tr.querySelectorAll("td,th");
+      if (tds.length < 4) return;
+      const n = parseInt(tds[0].textContent.trim(), 10);
+      if (!Number.isInteger(n)) return;
+      const name = tds[1].textContent.trim();
+      const statusCell = tds[2] || tds[3]; // your “Paid/Not Paid/Available” cell
+      const dateCell   = tds[3] || tds[4];
+
+      // If unassigned, leave "Available"
+      if (!name || name === "-" || /available/i.test(statusCell.textContent)) return;
+
+      const paidUntilText = dateCell ? dateCell.textContent.trim() : "";
+      const paid = isPaidForNextDraw(paidUntilText);
+
+      // Update the badge text (keeps your styling)
+      statusCell.textContent = paid ? "Paid Up" : "Not Paid";
+      statusCell.className = statusCell.className
+        .replace(/paid|not\s*paid|available/gi, "") // basic clean
+        .trim();
+      // Optional: add simple classes you might already style
+      statusCell.classList.add(paid ? "paid" : "not-paid");
+    });
+  }
+
+  /* Wrap your render to apply the new rule */
+  if (typeof window.renderTable === "function") {
+    const _render = window.renderTable;
+    window.renderTable = function () {
+      _render.apply(this, arguments);
+      // after your table draws, rewrite badges based on nextDrawDate
+      applyPaidBadgesForNextDraw();
+    };
+  }
+
+  /* Also recompute when nextDraw changes (if you have an input with that id) */
+  document.addEventListener("change", (e) => {
+    if (e.target && e.target.id === "nextDrawDate") {
+      setTimeout(applyPaidBadgesForNextDraw, 0);
+    }
+  });
+
+  /* --- Winners log --- */
+  function ensureWinnersInit() {
+    if (!window.gameData) window.gameData = {};
+    if (!Array.isArray(window.gameData.winners)) window.gameData.winners = [];
+    if (!window.gameData.totals) window.gameData.totals = { paidOut: 0, donated: 0 };
+  }
+
+  function computePotForNextDraw() {
+    return countPaidForNextDraw() * PRICE; // simple pot: £2 × paid players
+  }
+
+  function recordCurrentWinner() {
+    ensureWinnersInit();
+    const g = window.gameData;
+    const w = g.winner || {};
+    const num = w.number;
+    if (num == null) { alert("Set a winner first."); return; }
+
+    const holder = (g.numbers && g.numbers[num]) || {};
+    const paid   = isPaidForNextDraw(holder.paidUntil);
+    const pot    = computePotForNextDraw();
+
+    const rec = {
+      date: new Date().toISOString().slice(0,10),
+      drawDate: nextDrawISO(),
+      number: num,
+      name: w.playerName || holder.name || null,
+      amount: paid ? pot : 0,
+      donation: paid ? 0 : pot
+    };
+
+    g.winners.push(rec);
+    g.totals.paidOut += rec.amount;
+    g.totals.donated += rec.donation;
+
+    // Save (your saveData already pushes to cloud)
+    if (typeof window.saveData === "function") window.saveData();
+    renderWinnersTab();
+  }
+
+  function renderWinnersTab() {
+    ensureWinnersInit();
+    // Create the tab/section once
+    let sec = document.getElementById("winnersTab");
+    if (!sec) {
+      sec = document.createElement("section");
+      sec.id = "winnersTab";
+      sec.style.margin = "24px 0";
+      sec.innerHTML = `
+        <h2 style="margin-bottom:8px">Winners</h2>
+        <div id="winnersSummary" style="margin:8px 0;"></div>
+        <div style="overflow:auto">
+          <table id="winnersTable" style="width:100%;border-collapse:collapse;">
+            <thead>
+              <tr>
+                <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">Date</th>
+                <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">Draw</th>
+                <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">No.</th>
+                <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">Name</th>
+                <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">Paid Out</th>
+                <th style="text-align:left;padding:8px;border-bottom:1px solid #eee;">Donated</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <button id="recordWinnerBtn" style="margin-top:10px">Record current winner</button>
+      `;
+      // Stick it under your main content
+      document.addEventListener("DOMContentLoaded", () => {
+        document.body.appendChild(sec);
+        const btn = document.getElementById("recordWinnerBtn");
+        if (btn) btn.onclick = recordCurrentWinner;
+      });
+    }
+
+    const g = window.gameData;
+    const tb = sec.querySelector("tbody");
+    tb.innerHTML = (g.winners || [])
+      .map(r => `
+        <tr>
+          <td style="padding:6px;border-bottom:1px solid #f2f2f2">${r.date || ""}</td>
+          <td style="padding:6px;border-bottom:1px solid #f2f2f2">${r.drawDate || ""}</td>
+          <td style="padding:6px;border-bottom:1px solid #f2f2f2">${r.number ?? ""}</td>
+          <td style="padding:6px;border-bottom:1px solid #f2f2f2">${r.name ?? ""}</td>
+          <td style="padding:6px;border-bottom:1px solid #f2f2f2">£${(+r.amount || 0).toFixed(2)}</td>
+          <td style="padding:6px;border-bottom:1px solid #f2f2f2">£${(+r.donation || 0).toFixed(2)}</td>
+        </tr>
+      `).join("");
+
+    const paidOut = +((g.totals && g.totals.paidOut) || 0);
+    const donated = +((g.totals && g.totals.donated) || 0);
+    const sum = sec.querySelector("#winnersSummary");
+    sum.innerHTML = `
+      <strong>Total paid out:</strong> £${paidOut.toFixed(2)}
+      &nbsp;&nbsp;|&nbsp;&nbsp;
+      <strong>Total donated:</strong> £${donated.toFixed(2)}
+      &nbsp;&nbsp;|&nbsp;&nbsp;
+      <strong>Current pot:</strong> £${computePotForNextDraw().toFixed(2)} (at £${PRICE.toFixed(2)} each)
+    `;
+  }
+
+  // Re-render winners when data loads or changes
+  document.addEventListener("DOMContentLoaded", renderWinnersTab);
+  setInterval(() => { renderWinnersTab(); applyPaidBadgesForNextDraw(); }, 15000);
+
+  // If you have a "Set Winner" button with id, auto-attach:
+  document.addEventListener("click", (e) => {
+    if (e.target && e.target.id === "setWinnerBtnAfter") {
+      // your page may use a different id — this is just a convenience hook
+      setTimeout(renderWinnersTab, 50);
+    }
+  });
+})();
+</script>
 
 </body>
 </html>
