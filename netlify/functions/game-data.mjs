@@ -5,24 +5,27 @@ const STORE = "bonus-ball";
 const KEY = "gameData.json";
 
 const SITE_ID = process.env.BLOBS_SITE_ID || "";
-const TOKEN = process.env.BLOBS_TOKEN || "";
+const TOKEN   = process.env.BLOBS_TOKEN || "";
+const ADMIN   = process.env.ADMIN_KEY || "";
 
-function headers() {
-  return { "Content-Type": "application/json", "Cache-Control": "no-store" };
-}
+const USE_MANUAL = Boolean(SITE_ID && TOKEN);
 
-function ok(body) {
-  return { statusCode: 200, headers: headers(), body: JSON.stringify(body) };
-}
-function unauth() {
-  return { statusCode: 401, headers: headers(), body: JSON.stringify("unauthorised") };
-}
+// Common responses
+const headers = { "Content-Type": "application/json", "Cache-Control": "no-store" };
+const ok   = (b) => ({ statusCode: 200, headers, body: JSON.stringify(b) });
+const bad  = (s, b) => ({ statusCode: s, headers, body: JSON.stringify(b) });
+const unauth = () => bad(401, "unauthorised");
 
 export async function handler(event) {
-  // Use manual config if auto Blobs isn’t available
-  const store = (SITE_ID && TOKEN)
-    ? getStore({ name: STORE, siteID: SITE_ID, token: TOKEN })
+  // ✅ Correct getStore usage (manual creds are the SECOND argument)
+  const store = USE_MANUAL
+    ? getStore(STORE, { siteID: SITE_ID, token: TOKEN })
     : getStore(STORE);
+
+  // Debug: /.netlify/functions/game-data?debug=1
+  if (event.queryStringParameters?.debug === "1") {
+    return ok({ hasSiteId: !!SITE_ID, hasToken: !!TOKEN, useManual: USE_MANUAL });
+  }
 
   if (event.httpMethod === "GET") {
     const data = await store.get(KEY, { type: "json" });
@@ -30,18 +33,18 @@ export async function handler(event) {
   }
 
   if (event.httpMethod === "POST") {
-    const body = JSON.parse(event.body || "{}");
+    let body = {};
+    try { body = JSON.parse(event.body || "{}"); } catch {}
     const adminKey = event.headers["x-admin-key"] || event.headers["X-Admin-Key"] || "";
-    const expected = process.env.ADMIN_KEY || "";
 
     if (body?.action === "auth") {
-      return adminKey && expected && adminKey === expected ? ok("ok") : unauth();
+      return (adminKey && ADMIN && adminKey === ADMIN) ? ok("ok") : unauth();
     }
-    if (!expected || adminKey !== expected) return unauth();
+    if (!ADMIN || adminKey !== ADMIN) return unauth();
 
     await store.setJSON(KEY, body.data || {});
     return ok({ ok: true });
   }
 
-  return { statusCode: 405, body: "Method Not Allowed" };
+  return bad(405, "Method Not Allowed");
 }
