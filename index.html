@@ -810,6 +810,27 @@
   setInterval(pullRemote, 15000);
 })();
 </script>
+<script>
+(async function forceSharedLoadOnce(){
+  try {
+    const r = await fetch('/.netlify/functions/game-data');
+    if (!r.ok) return;
+    const d = await r.json();
+
+    // normalise keys like 1,2,3 → "1","2","3"
+    const nums = d.numbers || {};
+    const normalised = Object.fromEntries(
+      Object.entries(nums).map(([k,v]) => [String(parseInt(k,10)), v])
+    );
+
+    // merge and re-render with your existing functions
+    window.gameData = { ...(window.gameData || {}), ...d, numbers: normalised };
+    window.renderTable && window.renderTable();
+    window.updateStats && window.updateStats();
+    window.renderWinner && window.renderWinner();
+  } catch(e) { console.warn('shared load failed', e); }
+})();
+</script>
 
 </body>
 </html>
