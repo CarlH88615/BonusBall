@@ -901,6 +901,84 @@ function checkAdminCode() {
   setInterval(pullRemote, 15000);
 })();
 </script>
+<script>
+(function(){
+  // use the global ADMIN_KEY you added earlier
+  if (typeof ADMIN_KEY === 'undefined') window.ADMIN_KEY = "";
+
+  // --- floating Cloud panel ---
+  const panel = document.createElement('div');
+  panel.id='cloudSyncPanel';
+  panel.style.cssText = 'position:fixed;bottom:12px;right:12px;z-index:99999;background:#fff;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font:12px/1.4 system-ui;box-shadow:0 4px 16px rgba(0,0,0,.12)';
+  panel.innerHTML = '<strong>Cloud</strong> <button id="csUnlock">Unlock</button> <button id="csPush">Push</button> <button id="csPull">Pull</button> <label style="margin-left:6px;"><input type="checkbox" id="csAuto"> Auto</label>';
+  document.addEventListener('DOMContentLoaded', ()=>document.body.appendChild(panel));
+
+  async function auth(pw){
+    const res = await fetch('/.netlify/functions/game-data',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-admin-key':pw},
+      body:JSON.stringify({action:'auth'})
+    });
+    return res.ok;
+  }
+  async function pull(){
+    try{
+      const r= await fetch('/.netlify/functions/game-data');
+      if(!r.ok) return;
+      const data = await r.json();
+      if (data && typeof data==='object'){
+        if (window.gameData && typeof window.gameData==='object'){
+          window.gameData = { ...window.gameData, ...data };
+        } else { window.gameData = data; }
+        window.renderTable && window.renderTable();
+        window.updateStats && window.updateStats();
+        window.renderWinner && window.renderWinner();
+      }
+    }catch(e){ console.warn('pull error',e);}
+  }
+  async function push(){
+    if(!window.ADMIN_KEY){ alert('Unlock first'); return; }
+    try{
+      await fetch('/.netlify/functions/game-data',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','x-admin-key':window.ADMIN_KEY},
+        body:JSON.stringify({action:'save',data:window.gameData||{}})
+      });
+      alert('Pushed!');
+    }catch(e){ console.warn('push error',e); }
+  }
+
+  // Hook up buttons
+  document.addEventListener('click', async (e)=>{
+    if(e.target.id==='csUnlock'){
+      const pw = prompt('Enter ADMIN_KEY (the one you set in Netlify)');
+      if(!pw) return;
+      if(await auth(pw)){ window.ADMIN_KEY=pw; e.target.textContent='Unlocked'; }
+      else alert('Wrong key');
+    }
+    if(e.target.id==='csPull'){ pull(); }
+    if(e.target.id==='csPush'){ push(); }
+  });
+  document.addEventListener('change', (e)=>{
+    if(e.target.id==='csAuto'){
+      if(e.target.checked){ pull(); window.__auto = setInterval(pull,15000); }
+      else { clearInterval(window.__auto); window.__auto=null; }
+    }
+  });
+
+  // Ensure any existing saveData() also pushes
+  if (typeof window.saveData === 'function') {
+    const orig = window.saveData;
+    window.saveData = function(){
+      try { orig.apply(this, arguments); } catch {}
+      push();
+    };
+  }
+
+  // Load once on page load
+  document.addEventListener('DOMContentLoaded', pull);
+})();
+</script>
 
 </body>
 </html>
