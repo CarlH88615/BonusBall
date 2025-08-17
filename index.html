@@ -1079,89 +1079,98 @@
     if (m) return `${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`;
     try { return new Date(t).toISOString().slice(0,10); } catch { return null; }
   };
-  const addDays = (iso, days) => {
-    const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + days);
-    return d.toISOString().slice(0,10);
-  };
-  const daysBetween = (isoA, isoB) => {
-    if (!isoA || !isoB) return NaN;
-    const A = new Date(isoA + 'T00:00:00Z').getTime();
-    const B = new Date(isoB + 'T00:00:00Z').getTime();
-    return Math.floor((A - B) / 86400000);
-  };
-  const nextDrawISO = () => {
-    const s = (window.gameData && window.gameData.nextDrawDate) || '';
-    return toISO(s) || new Date().toISOString().slice(0,10);
-  };
-  // paid for the *next draw* if paidUntil >= nextDrawDate
-  const isPaidForNextDraw = (paidUntil) => {
-    const pu = toISO(paidUntil);
-    const nd = nextDrawISO();
-    return pu && pu >= nd;
-  };
+  const toUK = (iso) => iso ? iso.split('-').reverse().join('/') : '-';
+  const addDays = (iso, days) => { const d=new Date(iso+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+days); return d.toISOString().slice(0,10); };
+  const daysBetween = (isoA, isoB) => { if(!isoA||!isoB) return NaN; const A=+new Date(isoA+'T00:00:00Z'); const B=+new Date(isoB+'T00:00:00Z'); return Math.floor((A-B)/86400000); };
+  const nextDrawISO = () => toISO(window.gameData?.nextDrawDate) || new Date().toISOString().slice(0,10);
+  const isPaidForNextDraw = (paidUntil) => { const pu=toISO(paidUntil), nd=nextDrawISO(); return pu && pu >= nd; };
 
-  // ---------- colouring (status + paid-until cell) ----------
+  // ---------- table column mapping by header text ----------
+  function findMainTable(){
+    const tables = document.querySelectorAll('table');
+    for (const t of tables) {
+      const headers = [...t.querySelectorAll('thead th, tr:first-child th')].map(th=>th.textContent.trim().toLowerCase());
+      const h = headers.join('|');
+      if (h.includes('player') && h.includes('paid until') && h.includes('status')) return t;
+    }
+    return null;
+  }
+  function colMap(t){
+    const map = {};
+    const ths = t.querySelectorAll('thead th, tr:first-child th');
+    ths.forEach((th,i)=>{
+      const txt = th.textContent.trim().toLowerCase();
+      if (txt.includes('number')) map.num=i;
+      if (txt.includes('player')) map.name=i;
+      if (txt.includes('status')) map.status=i;
+      if (txt.includes('paid until')) map.paid=i;
+    });
+    return map;
+  }
+
+  // ---------- colour & fill without moving cells ----------
   function colourRows(){
-    const rows = document.querySelectorAll('table tr');
+    const t = findMainTable(); if(!t) return;
+    const idx = colMap(t); if (idx.num==null || idx.status==null || idx.paid==null) return;
     const nd = nextDrawISO();
 
-    rows.forEach(tr => {
-      const tds = tr.querySelectorAll('td,th');
-      if (tds.length < 4) return;
+    (t.querySelectorAll('tbody tr, tr')||[]).forEach(tr=>{
+      const cells = tr.children; if(!cells || !cells.length) return;
+      if (cells.length <= Math.max(idx.num, idx.status, idx.paid)) return;
 
-      // Heuristic columns: [0]=#, [1]=Name, [2]=Status, [3]=Paid until
-      const numberCell = tds[0], nameCell = tds[1], statusCell = tds[2], paidCell = tds[3];
+      const n = parseInt(cells[idx.num].textContent.trim(), 10);
+      if (!Number.isInteger(n)) return; // skip headers
 
-      const n = parseInt(numberCell.textContent.trim(), 10);
-      if (!Number.isInteger(n)) return;
+      const name = (cells[idx.name]?.textContent || '').trim();
+      const statusCell = cells[idx.status];
+      const paidCell   = cells[idx.paid];
 
-      const name = (nameCell.textContent || '').trim();
-      if (!name || /available/i.test((statusCell.textContent||''))) {
+      // pull paidUntil from data model if possible (more reliable than cell text)
+      const entry = (window.gameData?.numbers?.[n]) || {};
+      const puISO = toISO(entry.paidUntil) || toISO(paidCell?.textContent);
+
+      // Unassigned rows: show Available, clear colours
+      if (!name || name === '-' || /available/i.test(statusCell.textContent)) {
+        statusCell.textContent = 'Available';
         statusCell.classList.remove('badge-paid','badge-unpaid');
-        paidCell && paidCell.classList.remove('pu-green','pu-orange','pu-red');
+        if (paidCell) { paidCell.textContent='-'; paidCell.classList.remove('pu-green','pu-orange','pu-red'); }
         return;
       }
 
-      const paidUntilText = paidCell ? paidCell.textContent.trim() : '';
-      const paid = isPaidForNextDraw(paidUntilText);
-
       // Status badge
+      const paid = isPaidForNextDraw(puISO);
       statusCell.classList.remove('badge-paid','badge-unpaid');
       statusCell.classList.add(paid ? 'badge-paid' : 'badge-unpaid');
       statusCell.textContent = paid ? 'Paid Up' : 'Not Paid';
 
-      // Paid-until traffic light vs next draw
+      // Paid-until cell text + traffic lights
       if (paidCell) {
         paidCell.classList.remove('pu-green','pu-orange','pu-red');
-        const puISO = toISO(paidUntilText);
+        paidCell.textContent = puISO ? toUK(puISO) : '-';
         if (puISO) {
-          const d = daysBetween(puISO, nd);   // days after next draw
-          if (d >= 14)      paidCell.classList.add('pu-green');   // 2+ weeks ahead
-          else if (d >= 7)  paidCell.classList.add('pu-orange');  // 1 week ahead
-          else if (d < 0)   paidCell.classList.add('pu-red');     // overdue (before next draw)
-          // 0–6 days ahead: neutral
+          const d = daysBetween(puISO, nd);
+          if (d >= 14)      paidCell.classList.add('pu-green');
+          else if (d >= 7)  paidCell.classList.add('pu-orange');
+          else if (d < 0)   paidCell.classList.add('pu-red');
         }
       }
     });
   }
 
-  // Re-apply colours whenever your table renders
+  // Re-apply after your own render
   if (typeof window.renderTable === 'function') {
     const _render = window.renderTable;
-    window.renderTable = function(){
-      _render.apply(this, arguments);
-      colourRows();
-    };
+    window.renderTable = function(){ _render.apply(this, arguments); colourRows(); };
   }
   document.addEventListener('DOMContentLoaded', colourRows);
   document.addEventListener('change', (e)=>{
     if (e.target && e.target.id === 'nextDrawDate') setTimeout(colourRows, 0);
   });
+  setInterval(colourRows, 15000);
 
-  // ---------- Quick Pay logic (sets paidUntil correctly) ----------
-  // If current paidUntil < nextDraw → set to *this* nextDraw for 1 week (i.e., cover one draw)
-  // If already covered beyond nextDraw → extend from current paidUntil by 7*weeks
+  // ---------- admin-only Quick Pay ----------
   function payForWeeks(number, weeks=1){
+    if (!window.ADMIN_KEY) { alert('Admin only'); return; }
     if (!window.gameData) window.gameData = {};
     if (!window.gameData.numbers) window.gameData.numbers = {};
     const nd = nextDrawISO();
@@ -1169,38 +1178,45 @@
     const cur = toISO(entry.paidUntil);
 
     let newPU;
-    if (!cur || cur < nd) {
-      // cover the imminent draw; 1 week => nd, 2 weeks => nd+7, etc.
-      newPU = addDays(nd, 7*(weeks-1));
-    } else {
-      // extend from existing coverage
-      newPU = addDays(cur, 7*weeks);
-    }
+    if (!cur || cur < nd) newPU = addDays(nd, 7*(weeks-1)); // 1w => nd, 2w => nd+7, etc.
+    else newPU = addDays(cur, 7*weeks);
 
     window.gameData.numbers[number] = { ...entry, paidUntil: newPU };
-    // save (your saveData already pushes to cloud)
     if (typeof window.saveData === 'function') window.saveData();
-    // refresh UI now
     window.renderTable && window.renderTable();
-    window.updateStats && window.updateStats();
   }
 
-  // Optional: tiny floating "Quick Pay" button (admin helper)
-  const btn = document.createElement('button');
-  btn.textContent = 'Quick Pay';
-  btn.title = 'Mark a number as paid for upcoming draws';
-  btn.style.cssText = 'position:fixed;bottom:12px;left:12px;padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;z-index:99999';
-  btn.onclick = () => {
-    const n = prompt('Number to mark paid (1–59)?');
-    const num = parseInt(n,10);
-    if (!num || num<1 || num>59) return;
-    const w = parseInt(prompt('How many weeks? (default 1)'), 10) || 1;
-    payForWeeks(num, w);
-    alert(`Paid #${num} up to ${window.gameData.numbers[num].paidUntil}`);
-  };
-  document.addEventListener('DOMContentLoaded', ()=>document.body.appendChild(btn));
+  function showQuickPayButton(){
+    if (!window.ADMIN_KEY) return; // only after admin unlock
+    if (document.getElementById('quickPayBtn')) return; // already added
+    const btn = document.createElement('button');
+    btn.id='quickPayBtn';
+    btn.textContent = 'Quick Pay';
+    btn.title = 'Mark a number as paid for upcoming draws';
+    btn.style.cssText = 'position:fixed;bottom:12px;left:12px;padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;z-index:99999';
+    btn.onclick = () => {
+      if (!window.ADMIN_KEY) { alert('Admin only'); return; }
+      const n = parseInt(prompt('Number to mark paid (1–59)?'),10);
+      if(!n || n<1 || n>59) return;
+      const w = parseInt(prompt('How many weeks? (default 1)'),10) || 1;
+      payForWeeks(n, w);
+      alert(`Paid #${n} up to ${window.gameData.numbers[n].paidUntil}`);
+    };
+    document.body.appendChild(btn);
+  }
+
+  // show after admin unlock (wrap your unlock function if present)
+  if (typeof window.checkAdminCode === 'function') {
+    const old = window.checkAdminCode;
+    window.checkAdminCode = async function(){
+      try { await old.apply(this, arguments); } finally { setTimeout(showQuickPayButton, 50); }
+    };
+  }
+  // also, if admin is already unlocked on load (e.g., hot reload), show it
+  document.addEventListener('DOMContentLoaded', ()=>{ if (window.ADMIN_KEY) showQuickPayButton(); });
 })();
 </script>
+
 
 </body>
 </html>
