@@ -1381,6 +1381,60 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 })();
 </script>
+<style id="anti-copy">
+  /* Disable selection & long-press on the whole page... */
+  body.no-copy {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none; /* iOS long-press */
+  }
+  /* ...but allow selection/clipboard in form fields or anything you mark .allow-select */
+  input, textarea, [contenteditable="true"], .allow-select {
+    -webkit-user-select: text !important;
+    user-select: text !important;
+    -webkit-touch-callout: default !important;
+  }
+  /* Optional: make images harder to save via tap */
+  img { pointer-events: none; }
+</style>
+
+<script>
+(function(){
+  // Turn it on
+  document.addEventListener('DOMContentLoaded', () => {
+    document.body.classList.add('no-copy');
+  });
+
+  // Block context menu except on inputs/textareas/contenteditable or .allow-select
+  window.addEventListener('contextmenu', (e) => {
+    const safe = e.target.closest('input, textarea, [contenteditable="true"], .allow-select');
+    if (!safe) {
+      e.preventDefault();
+    }
+  }, { capture: true });
+
+  // Block some common “view source / devtools / print / save” shortcuts outside inputs
+  window.addEventListener('keydown', (e) => {
+    const inField = e.target.matches('input, textarea, [contenteditable="true"], .allow-select');
+    const k = (e.key || '').toLowerCase();
+
+    // F12 or Ctrl/Cmd+Shift+I (DevTools)
+    if (!inField && (k === 'f12' || ((e.ctrlKey || e.metaKey) && e.shiftKey && k === 'i'))) {
+      e.preventDefault(); e.stopPropagation();
+    }
+    // Ctrl/Cmd+U (view source), Ctrl/Cmd+S (save), Ctrl/Cmd+P (print)
+    if (!inField && (e.ctrlKey || e.metaKey) && ['u','s','p'].includes(k)) {
+      e.preventDefault(); e.stopPropagation();
+    }
+  }, { capture: true });
+
+  // Block copy outside inputs
+  document.addEventListener('copy', (e) => {
+    const inField = document.activeElement && document.activeElement.matches('input, textarea, [contenteditable="true"], .allow-select');
+    if (!inField) e.preventDefault();
+  }, { capture: true });
+})();
+</script>
 
 </body>
 </html>
