@@ -1,0 +1,8 @@
+{
+  "name": "bonusball-functions",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@netlify/blobs": "^7.0.0"
+  }
+}
