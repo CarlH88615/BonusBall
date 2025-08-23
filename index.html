@@ -849,17 +849,10 @@ if (!gameData.lotto) {
 let isAdminMode = false;
 let ADMIN_KEY = "";
 
-// ⬇️ ADD THIS LINE HERE (top-level, outside any function)
 const DEFAULT_DRAW_TIME = '19:45';
 
 // Tab functionality
-function showTab(tabName) {
-    // REPLACE this broken function:
-function showTab(tabName) {
-    …  // ← INVALID CHARACTER!
-}
 
-// WITH this correct version:
 function showTab(tabName) {
     // Hide all tab contents
     const tabContents = document.querySelectorAll('.tab-content');
