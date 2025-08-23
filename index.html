@@ -1238,11 +1238,24 @@
             return date.toLocaleDateString('en-GB');
         }
 
-        function isOverdue(paidUntilDate) {
-            const today = new Date();
-            const paidUntil = new Date(paidUntilDate);
-            return today > paidUntil;
-        }
+// weekly cut-off time (same every week)
+const DEFAULT_DRAW_TIME = '19:45';
+
+// next draw cut-off = date + time
+function getNextDrawCutoff() {
+  if (!window.gameData || !gameData.nextDrawDate) return null;
+  const t = gameData.nextDrawTime || DEFAULT_DRAW_TIME;
+  return new Date(`${gameData.nextDrawDate}T${t}:00`);
+}
+
+// overdue = paidUntil (end of that day) is before the cut-off
+function isOverdue(paidUntilDate) {
+  if (!paidUntilDate) return true; // blank = unpaid/overdue
+  const cutoff = getNextDrawCutoff();
+  if (!cutoff) return new Date(`${paidUntilDate}T23:59:59`) < new Date();
+  return new Date(`${paidUntilDate}T23:59:59`) < cutoff;
+}
+
 
         function getPlayerStatus(number) {
             const player = gameData.numbers[number];
@@ -1767,7 +1780,8 @@
             }
             
             setTimeout(() => {
-                const dateInput = document.getElementById('nextDrawDate');
+const t = gameData.nextDrawTime || DEFAULT_DRAW_TIME;
+nextDrawDisplay.textContent = `${formatDate(drawDate)} ${t}`;
                 if (dateInput && gameData.nextDrawDate) {
                     dateInput.value = gameData.nextDrawDate;
                 }
