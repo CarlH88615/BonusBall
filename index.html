@@ -854,7 +854,32 @@ const DEFAULT_DRAW_TIME = '19:45';
 
 // Tab functionality
 function showTab(tabName) {
-    …
+    // REPLACE this broken function:
+function showTab(tabName) {
+    …  // ← INVALID CHARACTER!
+}
+
+// WITH this correct version:
+function showTab(tabName) {
+    // Hide all tab contents
+    const tabContents = document.querySelectorAll('.tab-content');
+    tabContents.forEach(tab => tab.classList.remove('active'));
+    
+    // Remove active class from all tabs
+    const tabs = document.querySelectorAll('.tab-button');
+    tabs.forEach(tab => tab.classList.remove('active'));
+    
+    // Show selected tab content
+    document.getElementById(tabName).classList.add('active');
+    
+    // Add active class to clicked tab
+    event.target.classList.add('active');
+
+    // Update admin mode for current tab
+    if (tabName === 'bingo-lotto') {
+        updateLottoAdminMode();
+    }
+}
 }
 
             // Hide all tab contents
