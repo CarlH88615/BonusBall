@@ -1763,33 +1763,32 @@ function isOverdue(paidUntilDate) {
             return paidPlayers * 2;
         }
 
-        function updateStats() {
-            const totalAssigned = Object.values(gameData.numbers).filter(p => p.name).length;
-            const totalPaid = Object.keys(gameData.numbers).filter(num => 
-                getPlayerStatus(num) === 'paid'
-            ).length;
-            const totalCollected = calculateTotalCollected();
-            
-            document.getElementById('totalAssigned').textContent = totalAssigned;
-            document.getElementById('totalPaid').textContent = totalPaid;
-            document.getElementById('totalCollected').textContent = `£${totalCollected}`;
-            
-            const nextDrawDisplay = document.getElementById('nextDrawDisplay');
-            if (gameData.nextDrawDate) {
-                const drawDate = new Date(gameData.nextDrawDate);
-                nextDrawDisplay.textContent = formatDate(drawDate);
-            } else {
-                nextDrawDisplay.textContent = 'Not Set';
-            }
-            
-            setTimeout(() => {
-const t = gameData.nextDrawTime || DEFAULT_DRAW_TIME;
-nextDrawDisplay.textContent = `${formatDate(drawDate)} ${t}`;
-                if (dateInput && gameData.nextDrawDate) {
-                    dateInput.value = gameData.nextDrawDate;
-                }
-            }, 100);
-        }
+ function updateStats() {
+    const totalAssigned = Object.values(gameData.numbers).filter(p => p.name).length;
+    const totalPaid = Object.keys(gameData.numbers).filter(num => 
+        getPlayerStatus(num) === 'paid'
+    ).length;
+    const totalCollected = calculateTotalCollected();
+    
+    document.getElementById('totalAssigned').textContent = totalAssigned;
+    document.getElementById('totalPaid').textContent = totalPaid;
+    document.getElementById('totalCollected').textContent = `£${totalCollected}`;
+    
+    const nextDrawDisplay = document.getElementById('nextDrawDisplay');
+    if (gameData.nextDrawDate) {
+        const drawDate = new Date(gameData.nextDrawDate);
+        const t = gameData.nextDrawTime || DEFAULT_DRAW_TIME;
+        nextDrawDisplay.textContent = `${formatDate(drawDate)} ${t}`;
+    } else {
+        nextDrawDisplay.textContent = 'Not Set';
+    }
+    
+    // Set the date input if it exists
+    const dateInput = document.getElementById('nextDrawDate');
+    if (dateInput && gameData.nextDrawDate) {
+        dateInput.value = gameData.nextDrawDate;
+    }
+}
 
         // Initialize
         document.getElementById('viewBtn').addEventListener('click', () => setMode('view'));
