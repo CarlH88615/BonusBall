@@ -830,27 +830,33 @@
     </div>
 
     <script>
-        // Global data storage (keeping your existing structure)
-        let gameData = JSON.parse(localStorage.getItem('bonusBallData')) || {
-            numbers: {},
-            winner: null,
-            winnersHistory: [],
-            nextDrawDate: getNextSaturday().toISOString().split('T')[0]
-        };
+      // Global data storage (keeping your existing structure)
+let gameData = JSON.parse(localStorage.getItem('bonusBallData')) || {
+    numbers: {},
+    winner: null,
+    winnersHistory: [],
+    nextDrawDate: getNextSaturday().toISOString().split('T')[0]
+};
 
-        // Add lotto data to existing structure
-        if (!gameData.lotto) {
-            gameData.lotto = {
-                players: [],
-                drawnNumbers: []
-            };
-        }
+// Add lotto data to existing structure
+if (!gameData.lotto) {
+    gameData.lotto = {
+        players: [],
+        drawnNumbers: []
+    };
+}
 
-        let isAdminMode = false;
-        let ADMIN_KEY = "";
+let isAdminMode = false;
+let ADMIN_KEY = "";
 
-        // Tab functionality
-        function showTab(tabName) {
+// ⬇️ ADD THIS LINE HERE (top-level, outside any function)
+const DEFAULT_DRAW_TIME = '19:45';
+
+// Tab functionality
+function showTab(tabName) {
+    …
+}
+
             // Hide all tab contents
             const tabContents = document.querySelectorAll('.tab-content');
             tabContents.forEach(tab => tab.classList.remove('active'));
@@ -2071,6 +2077,9 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!inField) e.preventDefault();
   }, { capture: true });
 })();
+
+    const DEFAULT_DRAW_TIME = '19:45';
+
 </script>
 
 </body>
