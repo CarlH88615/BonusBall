@@ -1855,8 +1855,11 @@ nextDrawDisplay.textContent = `${formatDate(drawDate)} ${t}`;
     </script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-  try { loadRecentBonusBalls(10); } catch (e) { console.warn('bonus balls:', e); }
+  if (typeof loadRecentBonusBalls === 'function') {
+    loadRecentBonusBalls(10);
+  }
 });
+
 </script>
     <style id="recent-balls-mobile-fix">
   /* Scope everything so we don't affect other parts of the page */
